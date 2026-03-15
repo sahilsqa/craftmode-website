@@ -1,0 +1,120 @@
+{
+  "name": "Craft Mode - Milestone Notifications",
+  "nodes": [
+    {
+      "parameters": {
+        "pollTimes": { "item": [{ "mode": "everyMinute" }] },
+        "event": "onDatabaseItemUpdate",
+        "databaseId": "projects_database_id",
+        "filters": {
+          "property": "Status",
+          "condition": "changed"
+        }
+      },
+      "name": "Notion Status Change Trigger",
+      "type": "n8n-nodes-base.notionTrigger",
+      "typeVersion": 1,
+      "position": [250, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const project = $input.first().json;\nconst status = project.Status.select.name;\n\nconst messages = {\n  'Design': {\n    subject: 'Design Phase Started - Mockups Coming Soon',\n    body: `Your project has moved to the Design phase! Our AI is generating initial mockups based on your requirements. You'll have designs to review within 48 hours.`\n  },\n  'Development': {\n    subject: 'Development Started - Building Your Solution',\n    body: `Exciting news! We've started building your project. Our AI development pipeline is working on your solution. Expect daily progress updates.`\n  },\n  'Review': {\n    subject: 'Ready for Your Review - Check It Out!',\n    body: `Your project is ready for review! Check out the preview link below and let us know what you think. Two rounds of revisions are included.`\n  },\n  'Launch': {\n    subject: "🚀 You're Live! Project Complete",\n    body: `Congratulations! Your project is now live. All systems operational. Final invoice has been sent. Thank you for choosing Craft Mode!`\n  }\n};\n\nreturn [{\n  json: {\n    ...project,\n    notification: messages[status] || null,\n    shouldNotify: !!messages[status]\n  }\n}];"
+      },
+      "name": "Determine Notification",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [450, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "condition-1",
+              "leftValue": "={{ $json.shouldNotify }}",
+              "rightValue": "true",
+              "operator": { "name": "equal", "type": "boolean" }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "name": "Should Notify?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [650, 300]
+    },
+    {
+      "parameters": {
+        "toEmail": "={{ $json['Client Email'].email }}",
+        "subject": "={{ $json.notification.subject }}",
+        "text": "={{ $json.notification.body + '\n\nProject: ' + $json.Name.title[0].plain_text + '\nStatus: ' + $json.Status.select.name + '\n\nView Dashboard: https://notion.so/craftmode/projects' }}",
+        "html": "=<div style='font-family: Arial, sans-serif; max-width: 600px;'><h2 style='color: #3b82f6;'>{{ $json.notification.subject.replace('🚀 ', '') }}</h2><p>{{ $json.notification.body.replace(/\\n/g, '<br>') }}</p><div style='background: #f3f4f6; padding: 15px; border-radius: 8px; margin: 20px 0;'><p><strong>Project:</strong> {{ $json.Name.title[0].plain_text }}</p><p><strong>Current Status:</strong> {{ $json.Status.select.name }}</p></div><p><a href='https://notion.so/craftmode/projects' style='background: #3b82f6; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; display: inline-block;'>View Project Dashboard</a></p><p>Questions? Just reply to this email.</p></div>"
+      },
+      "name": "Send Milestone Email",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2,
+      "position": [850, 200]
+    },
+    {
+      "parameters": {
+        "channel": "#projects",
+        "text": "📊 Project Status Update",
+        "blocks": [
+          {
+            "type": "section",
+            "text": {
+              "type": "mrkdwn",
+              "text": "*Project Update*\nClient: {{ $json['Client Email'].email }}\nNew Status: {{ $json.Status.select.name }}\nProject: {{ $json.Name.title[0].plain_text }}"
+            }
+          }
+        ]
+      },
+      "name": "Notify Team Slack",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2,
+      "position": [850, 400]
+    },
+    {
+      "parameters": {
+        "model": "claude-3-5-sonnet-20241022",
+        "messages": [
+          {
+            "role": "system",
+            "content": "Generate a personalized Loom video script for a project milestone update. Keep it under 2 minutes when spoken."
+          },
+          {
+            "role": "user",
+            "content": "=Write a Loom video script for this project update:\n\nProject: {{ $json.Name.title[0].plain_text }}\nStatus: {{ $json.Status.select.name }}\nClient: {{ $json['Client Email'].email }}\n\nThe script should:\n1. Greet the client by name\n2. Announce the milestone\n3. Explain what's been done\n4. Outline next steps\n5. Call to action\n\nKeep it conversational and friendly."
+          }
+        ]
+      },
+      "name": "Generate Video Script",
+      "type": "@anthropic-ai/n8n-nodes-base.anthropic",
+      "typeVersion": 1,
+      "position": [1050, 200]
+    }
+  ],
+  "connections": {
+    "Notion Status Change Trigger": {
+      "main": [[{ "node": "Determine Notification", "type": "main", "index": 0 }]]
+    },
+    "Determine Notification": {
+      "main": [[{ "node": "Should Notify?", "type": "main", "index": 0 }]]
+    },
+    "Should Notify?": {
+      "main": [
+        [{ "node": "Send Milestone Email", "type": "main", "index": 0 }],
+        [{ "node": "Notify Team Slack", "type": "main", "index": 0 }]
+      ]
+    },
+    "Send Milestone Email": {
+      "main": [[{ "node": "Generate Video Script", "type": "main", "index": 0 }]]
+    }
+  }
+}

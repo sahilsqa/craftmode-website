@@ -1,0 +1,98 @@
+{
+  "name": "Craft Mode - AI Proposal Generator",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "generate-proposal",
+        "responseMode": "responseNode"
+      },
+      "name": "Proposal Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [250, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const data = $input.first().json.body;\n\n// Validate required fields\nif (!data.clientEmail || !data.service || !data.requirements) {\n  return [{ json: { error: 'Missing required fields' } }];\n}\n\n// Calculate pricing\nconst pricing = {\n  website: { base: 1500, perPage: 300, rush: 500 },\n  ecommerce: { base: 3500, perProduct: 10, perFeature: 500 },\n  webapp: { base: 5000, perFeature: 1000 },\n  marketing: { base: 1000, perChannel: 500 }\n};\n\nconst service = pricing[data.service] || pricing.website;\nlet total = service.base;\n\n// Add-ons\nconst addons = [];\nif (data.pages > 5) {\n  const extra = (data.pages - 5) * service.perPage;\n  total += extra;\n  addons.push({ name: `Extra Pages (${data.pages - 5})`, price: extra });\n}\nif (data.rush) {\n  total += service.rush;\n  addons.push({ name: 'Rush Delivery (5 days)', price: service.rush });\n}\nif (data.features) {\n  data.features.forEach(f => {\n    total += service.perFeature;\n    addons.push({ name: f, price: service.perFeature });\n  });\n}\n\nreturn [{\n  json: {\n    ...data,\n    basePrice: service.base,\n    addons: addons,\n    totalPrice: total,\n    advancePayment: Math.round(total * 0.5),\n    finalPayment: Math.round(total * 0.5)\n  }\n}];"
+      },
+      "name": "Calculate Pricing",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [450, 300]
+    },
+    {
+      "parameters": {
+        "model": "claude-3-5-sonnet-20241022",
+        "messages": [
+          {
+            "role": "system",
+            "content": "You are a professional proposal writer for Craft Mode, an AI-powered digital agency. Write compelling, professional proposals that convert leads into clients."
+          },
+          {
+            "role": "user",
+            "content": "=Write a professional project proposal for:\n\nCLIENT: {{ $json.clientName }}\nCOMPANY: {{ $json.clientCompany }}\nSERVICE: {{ $json.service }}\n\nREQUIREMENTS:\n{{ $json.requirements }}\n\nPRICING:\n- Base Price: ${{ $json.basePrice }}\n- Add-ons: {{ JSON.stringify($json.addons) }}\n- Total: ${{ $json.totalPrice }}\n- Payment Terms: 50% advance (${{ $json.advancePayment }}), 50% on delivery\n\nTIMELINE: {{ $json.timeline || '10 business days' }}\n\nWrite the following sections:\n1. Executive Summary (2-3 sentences)\n2. Project Scope (bullet points)\n3. Our Process (4 steps: Discovery, Design, Development, Launch)\n4. Investment Breakdown (line items)\n5. Timeline (phases with dates)\n6. Next Steps\n\nKeep it professional but friendly. Highlight AI advantages (speed, quality, cost). Make it persuasive."
+          }
+        ]
+      },
+      "name": "Generate Proposal Content",
+      "type": "@anthropic-ai/n8n-nodes-base.anthropic",
+      "typeVersion": 1,
+      "position": [650, 300]
+    },
+    {
+      "parameters": {
+        "operation": "create",
+        "title": "={{ 'Proposal for ' + $('Calculate Pricing').item.json.clientCompany }}",
+        "content": "={{ $json.content }}",
+        "folderId": "proposals"
+      },
+      "name": "Create PandaDoc Document",
+      "type": "n8n-nodes-base.pandaDoc",
+      "typeVersion": 1,
+      "position": [850, 200]
+    },
+    {
+      "parameters": {
+        "toEmail": "={{ $('Calculate Pricing').item.json.clientEmail }}",
+        "subject": "=Your {{ $('Calculate Pricing').item.json.service }} Proposal from Craft Mode",
+        "text": "=Hi {{ $('Calculate Pricing').item.json.clientName }},\n\nThank you for considering Craft Mode for your {{ $('Calculate Pricing').item.json.service }} project.\n\nI've prepared a detailed proposal based on our discussion:\n\nPROJECT INVESTMENT: ${{ $('Calculate Pricing').item.json.totalPrice }}\nTIMELINE: {{ $('Calculate Pricing').item.json.timeline || '10 business days' }}\n\n{{ $json.content.substring(0, 500) }}...\n\nView full proposal: {{ $json.documentUrl }}\n\nReady to move forward? Simply sign the proposal and we'll send the invoice for the 50% advance payment (${{ $('Calculate Pricing').item.json.advancePayment }}).\n\nQuestions? Just reply to this email or book a call: https://calendly.com/craftmode/consultation\n\nBest regards,\nCraft Mode Team",
+        "html": "=<html><body style='font-family: Arial, sans-serif; max-width: 600px;'><h2 style='color: #3b82f6;'>Hi {{ $('Calculate Pricing').item.json.clientName }},</h2><p>Thank you for considering <strong>Craft Mode</strong> for your {{ $('Calculate Pricing').item.json.service }} project.</p><div style='background: #f3f4f6; padding: 20px; border-radius: 8px; margin: 20px 0;'><h3 style='margin-top: 0;'>Project Summary</h3><p><strong>Investment:</strong> ${{ $('Calculate Pricing').item.json.totalPrice }}</p><p><strong>Timeline:</strong> {{ $('Calculate Pricing').item.json.timeline || '10 business days' }}</p></div><p>{{ $json.content.replace(/\n/g, '<br>') }}</p><p style='margin-top: 30px;'><a href='{{ $json.documentUrl }}' style='background: #3b82f6; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; display: inline-block;'>View Full Proposal</a></p><p>Ready to move forward? Simply sign the proposal and we'll send the invoice for the 50% advance payment.</p><p>Questions? <a href='https://calendly.com/craftmode/consultation'>Book a call</a> or reply to this email.</p><p>Best regards,<br><strong>Craft Mode Team</strong></p></body></html>"
+      },
+      "name": "Send Proposal Email",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2,
+      "position": [850, 400]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "json": "={\"success\": true, \"proposalId\": \"{{ $json.documentId }}\", \"totalPrice\": {{ $('Calculate Pricing').item.json.totalPrice }}}"
+      },
+      "name": "Success Response",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1050, 300]
+    }
+  ],
+  "connections": {
+    "Proposal Webhook": {
+      "main": [[{ "node": "Calculate Pricing", "type": "main", "index": 0 }]]
+    },
+    "Calculate Pricing": {
+      "main": [[{ "node": "Generate Proposal Content", "type": "main", "index": 0 }]]
+    },
+    "Generate Proposal Content": {
+      "main": [
+        [{ "node": "Create PandaDoc Document", "type": "main", "index": 0 }],
+        [{ "node": "Send Proposal Email", "type": "main", "index": 0 }]
+      ]
+    },
+    "Create PandaDoc Document": {
+      "main": [[{ "node": "Success Response", "type": "main", "index": 0 }]]
+    },
+    "Send Proposal Email": {
+      "main": [[{ "node": "Success Response", "type": "main", "index": 0 }]]
+    }
+  }
+}

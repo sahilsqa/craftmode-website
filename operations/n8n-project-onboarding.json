@@ -1,0 +1,137 @@
+{
+  "name": "Craft Mode - Project Onboarding",
+  "nodes": [
+    {
+      "parameters": {
+        "events": ["payment_intent.succeeded"],
+        "options": {}
+      },
+      "name": "Stripe Payment Webhook",
+      "type": "n8n-nodes-base.stripeTrigger",
+      "typeVersion": 1,
+      "position": [250, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Filter for advance payments only\nconst payment = $input.first().json;\n\nif (payment.description && payment.description.includes('advance')) {\n  return [{ json: payment }];\n}\n\n// Or check metadata\nif (payment.metadata && payment.metadata.paymentType === 'advance') {\n  return [{ json: payment }];\n}\n\nreturn [];"
+      },
+      "name": "Filter Advance Payments",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [450, 300]
+    },
+    {
+      "parameters": {
+        "operation": "create",
+        "parentDatabaseId": "projects_database_id",
+        "properties": {
+          "Name": {
+            "title": [{ "text": { "content": "={{ $json.customer.email }}" } }]
+          },
+          "Status": {
+            "select": { "name": "Discovery" }
+          },
+          "Client Email": {
+            "email": "={{ $json.customer.email }}"
+          },
+          "Payment Status": {
+            "select": { "name": "Advance Paid" }
+          },
+          "Amount": {
+            "number": "={{ $json.amount / 100 }}"
+          },
+          "Start Date": {
+            "date": { "start": "={{ $now }}" }
+          },
+          "Stripe Payment ID": {
+            "rich_text": [{ "text": { "content": "={{ $json.id }}" } }]
+          }
+        }
+      },
+      "name": "Create Notion Project",
+      "type": "n8n-nodes-base.notion",
+      "typeVersion": 2,
+      "position": [650, 200]
+    },
+    {
+      "parameters": {
+        "operation": "create",
+        "properties": [
+          { "property": "email", "value": "={{ $json.customer.email }}" },
+          { "property": "firstname", "value": "={{ $json.customer.name ? $json.customer.name.split(' ')[0] : 'Client' }}" },
+          { "property": "lastname", "value": "={{ $json.customer.name ? $json.customer.name.split(' ').slice(1).join(' ') : '' }}" },
+          { "property": "dealstage", "value": "closedwon" },
+          { "property": "amount", "value": "={{ $json.amount / 100 }}" }
+        ]
+      },
+      "name": "Update HubSpot Deal",
+      "type": "n8n-nodes-base.hubspot",
+      "typeVersion": 2,
+      "position": [650, 400]
+    },
+    {
+      "parameters": {
+        "channel": "#projects",
+        "text": "🎉 New Project Started!",
+        "blocks": [
+          {
+            "type": "section",
+            "text": {
+              "type": "mrkdwn",
+              "text": "*New Project Started!* 🚀\nClient: {{ $json.customer.email }}\nAmount: ${{ $json.amount / 100 }}\nStatus: Advance Paid"
+            }
+          },
+          {
+            "type": "actions",
+            "elements": [
+              {
+                "type": "button",
+                "text": { "type": "plain_text", "text": "View in Notion" },
+                "url": "https://notion.so/craftmode"
+              }
+            ]
+          }
+        ]
+      },
+      "name": "Notify Slack",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2,
+      "position": [850, 300]
+    },
+    {
+      "parameters": {
+        "toEmail": "={{ $json.customer.email }}",
+        "subject": "Welcome to Craft Mode - Let's Build Something Amazing!",
+        "text": "=Hi there,\n\nWelcome to Craft Mode! We're excited to work with you.\n\nWHAT HAPPENS NEXT:\n\n1. Discovery Phase (Days 1-2)\n   - You'll receive our detailed questionnaire\n   - We'll analyze your requirements\n   - AI generates initial concepts\n\n2. Design Phase (Days 3-5)\n   - Mockups delivered for review\n   - Two rounds of revisions included\n\n3. Development Phase (Days 6-9)\n   - AI-powered development\n   - Daily progress updates\n   - Your feedback incorporated\n\n4. Launch Phase (Day 10)\n   - Final testing\n   - Go live!\n\nYOUR PROJECT DASHBOARD:\nTrack progress: [Notion Link]\n\nQUESTIONNAIRE:\nPlease complete within 24 hours:\n[Discovery Form Link]\n\nNeed help? Reply to this email or join our Slack:\n[Slack Invite Link]\n\nLet's build something amazing!\n\nBest,\nCraft Mode Team",
+        "html": "=<div style='font-family: Arial, sans-serif; max-width: 600px;'><h2 style='color: #3b82f6;'>Welcome to Craft Mode! 🚀</h2><p>We're excited to work with you on your project.</p><h3>What Happens Next:</h3><div style='background: #f3f4f6; padding: 15px; border-radius: 8px; margin: 15px 0;'><p><strong>1. Discovery Phase</strong> (Days 1-2)<br>Detailed questionnaire → AI analysis → Initial concepts</p><p><strong>2. Design Phase</strong> (Days 3-5)<br>Mockups → Review → Revisions</p><p><strong>3. Development Phase</strong> (Days 6-9)<br>AI-powered build → Daily updates → Feedback loop</p><p><strong>4. Launch Phase</strong> (Day 10)<br>Final testing → Go live!</p></div><p><a href='#' style='background: #3b82f6; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; display: inline-block;'>Complete Discovery Questionnaire</a></p><p style='margin-top: 30px;'>Need help? Reply to this email anytime.</p><p>Best,<br><strong>Craft Mode Team</strong></p></div>"
+      },
+      "name": "Send Welcome Email",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2,
+      "position": [850, 500]
+    }
+  ],
+  "connections": {
+    "Stripe Payment Webhook": {
+      "main": [[{ "node": "Filter Advance Payments", "type": "main", "index": 0 }]]
+    },
+    "Filter Advance Payments": {
+      "main": [
+        [{ "node": "Create Notion Project", "type": "main", "index": 0 }],
+        [{ "node": "Update HubSpot Deal", "type": "main", "index": 0 }]
+      ]
+    },
+    "Create Notion Project": {
+      "main": [
+        [{ "node": "Notify Slack", "type": "main", "index": 0 }],
+        [{ "node": "Send Welcome Email", "type": "main", "index": 0 }]
+      ]
+    },
+    "Update HubSpot Deal": {
+      "main": [
+        [{ "node": "Notify Slack", "type": "main", "index": 0 }],
+        [{ "node": "Send Welcome Email", "type": "main", "index": 0 }]
+      ]
+    }
+  }
+}

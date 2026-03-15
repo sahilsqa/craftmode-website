@@ -1,0 +1,178 @@
+{
+  "name": "Craft Mode - AI Chatbot Handler",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "craftmode-chatbot",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "chat-webhook",
+      "name": "Chat Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [250, 300],
+      "webhookId": "craftmode-chatbot"
+    },
+    {
+      "parameters": {
+        "jsCode": "const data = $input.first().json.body;\n\n// Handle different message types\nif (data.type === 'lead_capture') {\n  return [{\n    json: {\n      type: 'lead_capture',\n      data: data\n    }\n  }];\n}\n\n// Regular chat message\nreturn [{\n  json: {\n    type: 'chat',\n    message: data.message,\n    history: data.history || [],\n    userInfo: data.userInfo || {},\n    leadCaptured: data.leadCaptured || false\n  }\n}];"
+      },
+      "id": "route-request",
+      "name": "Route Request",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [450, 300]
+    },
+    {
+      "parameters": {
+        "model": "claude-3-5-sonnet-20241022",
+        "messages": [
+          {
+            "role": "system",
+            "content": "You are the AI assistant for Craft Mode, an AI-powered digital agency that builds websites, apps, and marketing automation for small and medium businesses.\n\nABOUT CRAFT MODE:\n- We deliver professional websites in 7-10 days (traditional agencies take 3 months)\n- Prices: Starter Website $1,500, Growth Package $3,500, Custom Apps from $5,000, Marketing from $1,000/month\n- We offer free mockups within 48 hours\n- Based in Sweden, serving US and European markets\n- All work is done using AI tools for speed and quality\n\nSERVICES:\n1. AI Website Builder - Professional websites, landing pages, e-commerce\n2. Custom App Development - Web apps, client portals, internal tools\n3. AI Marketing - Automated content, email campaigns, social media\n\nPROCESS:\n1. Free 15-minute discovery call\n2. Free mockup in 48 hours\n3. Build and deliver in 7-10 days\n4. Unlimited revisions included\n\nBOOKING:\n- Calendly link: https://calendly.com/craftmode/consultation\n- Email: hello@craftmode.co\n\nIMPORTANT RULES:\n- Be helpful, professional, and concise\n- If asked about pricing, give the specific numbers above\n- If asked about timeline, emphasize 7-10 days vs 3 months\n- If the user seems interested in services, suggest booking a call\n- Don't make up information not listed above\n- Keep responses under 150 words when possible"
+          },
+          {
+            "role": "user",
+            "content": "={{ JSON.stringify($json.history) }}\n\nUser: {{ $json.message }}"
+          }
+        ],
+        "options": {
+          "maxTokens": 500,
+          "temperature": 0.7
+        }
+      },
+      "id": "claude-api",
+      "name": "Claude API",
+      "type": "@anthropic-ai/n8n-nodes-base.anthropic",
+      "typeVersion": 1,
+      "position": [650, 200],
+      "credentials": {
+        "anthropicApi": {
+          "id": "YOUR_ANTHROPIC_CREDENTIAL_ID",
+          "name": "Anthropic API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Return chat response\nreturn [{\n  json: {\n    reply: $input.first().json.content\n  }\n}];"
+      },
+      "id": "format-response",
+      "name": "Format Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [850, 200]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "json": "={{ JSON.stringify($json) }}"
+      },
+      "id": "chat-response",
+      "name": "Chat Response",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1050, 200]
+    },
+    {
+      "parameters": {
+        "toEmail": "hello@craftmode.co",
+        "subject": "=New Chat Lead: {{ $json.data.name }}",
+        "text": "=Name: {{ $json.data.name }}\nEmail: {{ $json.data.email }}\n\nChat History:\n{{ JSON.stringify($json.data.chatHistory, null, 2) }}\n\n---\nCaptured: {{ $json.data.timestamp }}\nSource: {{ $json.data.source }}",
+        "options": {}
+      },
+      "id": "send-lead-email",
+      "name": "Send Lead Email",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2,
+      "position": [650, 400],
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "YOUR_GMAIL_CREDENTIAL_ID",
+          "name": "Gmail - hello@craftmode.co"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "json": "={\"success\": true}"
+      },
+      "id": "lead-response",
+      "name": "Lead Response",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [850, 400]
+    }
+  ],
+  "connections": {
+    "Chat Webhook": {
+      "main": [
+        [
+          {
+            "node": "Route Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route Request": {
+      "main": [
+        [
+          {
+            "node": "Claude API",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Send Lead Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Claude API": {
+      "main": [
+        [
+          {
+            "node": "Format Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Response": {
+      "main": [
+        [
+          {
+            "node": "Chat Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Lead Email": {
+      "main": [
+        [
+          {
+            "node": "Lead Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [],
+  "pinData": {}
+}
