@@ -1,0 +1,205 @@
+<!-- Lead Capture Form for Craft Mode -->
+<!-- Add this to your website to capture leads -->
+
+<form id="leadCaptureForm" class="space-y-4">
+  <!-- Honeypot field (hidden from users, catches bots) -->
+  <input type="text" name="_gotcha" style="display:none" tabindex="-1" autocomplete="off">
+  
+  <div class="grid md:grid-cols-2 gap-4">
+    <div>
+      <label for="name" class="block text-sm font-medium mb-1">Full Name *</label>
+      <input 
+        type="text" 
+        id="name" 
+        name="name" 
+        required
+        class="w-full px-4 py-3 rounded-lg border focus:ring-2 focus:ring-blue-500"
+        placeholder="John Smith"
+      >
+    </div>
+    
+    <div>
+      <label for="email" class="block text-sm font-medium mb-1">Email Address *</label>
+      <input 
+        type="email" 
+        id="email" 
+        name="email" 
+        required
+        class="w-full px-4 py-3 rounded-lg border focus:ring-2 focus:ring-blue-500"
+        placeholder="john@company.com"
+      >
+    </div>
+  </div>
+  
+  <div>
+    <label for="company" class="block text-sm font-medium mb-1">Company Name</label>
+    <input 
+      type="text" 
+      id="company" 
+      name="company"
+      class="w-full px-4 py-3 rounded-lg border focus:ring-2 focus:ring-blue-500"
+      placeholder="Acme Inc."
+    >
+  </div>
+  
+  <div class="grid md:grid-cols-2 gap-4">
+    <div>
+      <label for="service" class="block text-sm font-medium mb-1">Service Needed *</label>
+      <select 
+        id="service" 
+        name="service" 
+        required
+        class="w-full px-4 py-3 rounded-lg border focus:ring-2 focus:ring-blue-500"
+      >
+        <option value="">Select a service...</option>
+        <option value="Website">Website Design</option>
+        <option value="App">Web Application</option>
+        <option value="Marketing">Digital Marketing</option>
+        <option value="Redesign">Website Redesign</option>
+        <option value="Other">Other</option>
+      </select>
+    </div>
+    
+    <div>
+      <label for="budget" class="block text-sm font-medium mb-1">Budget Range</label>
+      <select 
+        id="budget" 
+        name="budget"
+        class="w-full px-4 py-3 rounded-lg border focus:ring-2 focus:ring-blue-500"
+      >
+        <option value="">Select budget...</option>
+        <option value="Under $1,500">Under $1,500</option>
+        <option value="$1,500 - $3,500">$1,500 - $3,500</option>
+        <option value="$3,500 - $5,000">$3,500 - $5,000</option>
+        <option value="$5,000 - $10,000">$5,000 - $10,000</option>
+        <option value="$10,000+">$10,000+</option>
+      </select>
+    </div>
+  </div>
+  
+  <div>
+    <label for="message" class="block text-sm font-medium mb-1">Tell us about your project *</label>
+    <textarea 
+      id="message" 
+      name="message" 
+      rows="4" 
+      required
+      minlength="10"
+      class="w-full px-4 py-3 rounded-lg border focus:ring-2 focus:ring-blue-500"
+      placeholder="I need a professional website for my consulting business. We help small businesses with..."
+    ></textarea>
+    <p class="text-xs text-gray-500 mt-1">Minimum 10 characters</p>
+  </div>
+  
+  <button 
+    type="submit" 
+    id="submitBtn"
+    class="w-full bg-blue-600 text-white py-4 rounded-lg font-semibold hover:bg-blue-700 transition flex items-center justify-center gap-2"
+  >
+    <span id="btnText">Get My Free Consultation</span>
+    <svg id="btnSpinner" class="w-5 h-5 animate-spin hidden" fill="none" viewBox="0 0 24 24">
+      <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+      <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+    </svg>
+  </button>
+  
+  <p class="text-sm text-gray-500 text-center">
+    🔒 Your information is secure. We typically respond within 24 hours.
+  </p>
+</form>
+
+<!-- Success Message (hidden by default) -->
+<div id="successMessage" class="hidden text-center py-8">
+  <div class="w-16 h-16 bg-green-500 rounded-full flex items-center justify-center mx-auto mb-4">
+    <svg class="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+    </svg>
+  </div>
+  <h3 class="text-2xl font-bold text-gray-900 mb-2">Message Sent!</h3>
+  <p class="text-gray-600 mb-2">Thanks for reaching out. We've sent a confirmation to your email.</p>
+  <p class="text-sm text-gray-500">Lead ID: <span id="leadId"></span></p>
+  <button onclick="resetForm()" class="mt-6 text-blue-600 underline hover:text-blue-800">Send another message</button>
+</div>
+
+<!-- Error Message (hidden by default) -->
+<div id="errorMessage" class="hidden mt-4 p-4 bg-red-50 border border-red-200 rounded-lg">
+  <p class="text-red-700" id="errorText">Something went wrong. Please try again.</p>
+</div>
+
+<script>
+const form = document.getElementById('leadCaptureForm');
+const successMessage = document.getElementById('successMessage');
+const errorMessage = document.getElementById('errorMessage');
+const errorText = document.getElementById('errorText');
+const submitBtn = document.getElementById('submitBtn');
+const btnText = document.getElementById('btnText');
+const btnSpinner = document.getElementById('btnSpinner');
+const leadIdSpan = document.getElementById('leadId');
+
+// Update this with your n8n webhook URL
+const WEBHOOK_URL = 'http://localhost:5678/webhook/lead-capture';
+
+form.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  
+  // Reset messages
+  errorMessage.classList.add('hidden');
+  
+  // Show loading state
+  submitBtn.disabled = true;
+  btnText.textContent = 'Sending...';
+  btnSpinner.classList.remove('hidden');
+  
+  // Collect form data
+  const formData = {
+    name: document.getElementById('name').value,
+    email: document.getElementById('email').value,
+    company: document.getElementById('company').value,
+    service: document.getElementById('service').value,
+    budget: document.getElementById('budget').value,
+    message: document.getElementById('message').value,
+    _gotcha: document.querySelector('input[name="_gotcha"]').value
+  };
+  
+  try {
+    const response = await fetch(WEBHOOK_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
+      },
+      body: JSON.stringify(formData)
+    });
+    
+    const result = await response.json();
+    
+    if (result.success) {
+      // Show success
+      form.classList.add('hidden');
+      successMessage.classList.remove('hidden');
+      leadIdSpan.textContent = result.leadId || 'CM-' + Date.now().toString(36).toUpperCase();
+    } else {
+      // Show validation errors
+      throw new Error(result.errors?.join(', ') || 'Validation failed');
+    }
+  } catch (error) {
+    // Show error
+    errorMessage.classList.remove('hidden');
+    errorText.textContent = error.message || 'Failed to send. Please try again or email us directly at hello@craftmode.co';
+    
+    // Reset button
+    submitBtn.disabled = false;
+    btnText.textContent = 'Get My Free Consultation';
+    btnSpinner.classList.add('hidden');
+  }
+});
+
+function resetForm() {
+  form.reset();
+  form.classList.remove('hidden');
+  successMessage.classList.add('hidden');
+  submitBtn.disabled = false;
+  btnText.textContent = 'Get My Free Consultation';
+  btnSpinner.classList.add('hidden');
+}
+</script>
